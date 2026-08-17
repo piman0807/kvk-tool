@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="ja">
 <head>
@@ -5,62 +6,75 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>kvk用集結時刻計算ツール</title>
     <style>
-        body { font-family: sans-serif; padding: 15px; font-size: 16px; }
+        body { font-family: sans-serif; padding: 15px; font-size: 16px; max-width: 600px; margin: auto; }
         .row { display: flex; align-items: center; margin-bottom: 12px; }
-        input { padding: 12px; margin: 0 5px; border: 1px solid #ccc; border-radius: 4px; font-size: 16px; }
+        input { padding: 12px; margin: 0 5px; border: 1px solid #ccc; border-radius: 4px; font-size: 16px; box-sizing: border-box; }
         .name { flex: 2; width: 50%; }
         .sec { flex: 1; width: 20%; }
-        button { width: 100%; padding: 15px; font-size: 18px; border: none; border-radius: 8px; margin-top: 10px; color: white; }
+        .interval-row { display: flex; align-items: center; margin-bottom: 15px; font-weight: bold; }
+        .interval-sec { width: 30%; }
+        button { width: 100%; padding: 15px; font-size: 18px; border: none; border-radius: 8px; margin-top: 10px; color: white; cursor: pointer; }
         .btn-calc { background: #007bff; }
-        .btn-copy { background: #28a745; }
+        .btn-copy-target { background: #17a2b8; }
+        .btn-copy-members { background: #28a745; }
+        .btn-add { background: #6c757d; font-size: 14px; padding: 10px; width: auto; margin-bottom: 15px; }
         #output { margin-top: 20px; padding: 15px; background: #f8f9fa; border: 1px solid #dee2e6; white-space: pre-wrap; min-height: 50px; }
     </style>
 </head>
 <body>
 
     <h3>kvk用集結時刻計算ツール</h3>
-    <div>
-        基準時刻(UTC): <input type="number" id="baseTime" placeholder="123000" style="width: 90%;"><br>
-        集結時間(分): <input type="number" id="sharedMinutes" value="0" style="width: 90%;"> 分
+    <hr>
+    
+    <div class="interval-row">
+        インターバル時間: <input type="number" id="intervalSec" class="interval-sec" value="45" onfocus="this.select();"> 秒
     </div>
     <hr>
-    <div id="inputRows">
-        <script>
-            for(let i=1; i<=5; i++){
-                document.write(`<div class="row"><input type="text" class="name" placeholder="名前 ${i}"><input type="number" class="sec" value="0">秒</div>`);
-            }
-        </script>
-    </div>
+    
+    <button class="btn-add" onclick="addRow()">＋ メンバー行を追加</button>
+    
+    <div id="inputRows"></div>
     
     <button class="btn-calc" onclick="calculate()">一括計算する</button>
     <div id="output"></div>
-    <button class="btn-copy" onclick="copyToClipboard()">結果をコピー</button>
+    
+    <button class="btn-copy-members" onclick="copyMembersOnly()">メンバーの時間をコピー</button>
+    <button class="btn-copy-target" onclick="copyTargetOnly()">着弾時刻をコピー</button>
     
     <script>
-        // ページ読み込み時に現在の正確なUTC時刻を自動入力する
+        function addRow(name = "", sec = "") {
+            const container = document.getElementById('inputRows');
+            const index = container.children.length + 1;
+            const div = document.createElement('div');
+            div.className = 'row';
+            div.innerHTML = `
+                <input type="text" class="name" placeholder="名前 ${index}" value="${name}" onfocus="this.select();">
+                <input type="number" class="sec" value="${sec}" placeholder="秒" onfocus="this.select();">秒
+            `;
+            container.appendChild(div);
+        }
+
         window.onload = function() {
-            const now = new Date();
-            const f = (n) => String(n).padStart(2, '0');
-            const utcTimeStr = f(now.getUTCHours()) + f(now.getUTCMinutes()) + f(now.getUTCSeconds());
-            document.getElementById('baseTime').value = utcTimeStr;
+            addRow("ぶん", "36");
+            addRow("ふぁ", "37");
+            addRow("くろ", "37");
+            addRow("えり", "42");
+            addRow("", "");
         };
 
-        function calculate() {
-            const baseStr = document.getElementById('baseTime').value;
-            const sharedM = parseInt(document.getElementById('sharedMinutes').value) || 0;
-            if (baseStr.length !== 6) { alert("基準時刻は6桁の数字で入力してください。"); return; }
-            
-            const h = parseInt(baseStr.substring(0, 2)), m = parseInt(baseStr.substring(2, 4)), s = parseInt(baseStr.substring(4, 6));
-            const baseDate = new Date(Date.UTC(2023, 0, 1, h, m, s));
+        function getCalculationData() {
+            const now = new Date();
+            const baseDate = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), now.getUTCHours(), now.getUTCMinutes(), now.getUTCSeconds()));
+
+            const intervalVal = parseInt(document.getElementById('intervalSec').value) || 0;
 
             const names = document.querySelectorAll('.name');
             const secs = document.querySelectorAll('.sec');
             
             let validEntries = [];
-
-            for(let i=0; i<names.length; i++) {
+            for(let i = 0; i < names.length; i++) {
                 if(names[i].value.trim() !== "") {
-                    const secVal = parseInt(secs[i].value) || 0;
+                    const secVal = secs[i].value === "" ? 0 : parseInt(secs[i].value) || 0;
                     validEntries.push({
                         name: names[i].value.trim(),
                         sec: secVal
@@ -70,7 +84,7 @@
 
             if (validEntries.length === 0) {
                 alert("名前を入力してください。");
-                return;
+                return null;
             }
 
             let maxSec = validEntries[0].sec;
@@ -82,66 +96,43 @@
 
             const f = (n) => String(n).padStart(2, '0');
 
-            const finalBaseDate = new Date(baseDate.getTime() + (sharedM * 60 * 1000) + (maxSec * 1000));
-            const targetText = `着弾時刻: ${f(finalBaseDate.getUTCHours())}${f(finalBaseDate.getUTCMinutes())}${f(finalBaseDate.getUTCSeconds())}\n\n`;
+            const finalBaseDate = new Date(baseDate.getTime() + (maxSec * 1000) + (intervalVal * 1000) + (5 * 60 * 1000));
+            const targetText = `着弾時刻: ${f(finalBaseDate.getUTCHours())}${f(finalBaseDate.getUTCMinutes())}${f(finalBaseDate.getUTCSeconds())}`;
 
             let memberLines = [];
-            for(let i=0; i<validEntries.length; i++) {
+            for(let i = 0; i < validEntries.length; i++) {
                 const entry = validEntries[i];
                 const diffS = maxSec - entry.sec;
-                const newDate = new Date(baseDate.getTime() + (diffS * 1000));
-
+                const newDate = new Date(baseDate.getTime() + (diffS * 1000) + (intervalVal * 1000));
                 memberLines.push(`${entry.name} ${f(newDate.getUTCHours())}${f(newDate.getUTCMinutes())}${f(newDate.getUTCSeconds())}`);
             }
 
-            document.getElementById('output').innerText = targetText + memberLines.join('\n');
+            return {
+                targetText: targetText,
+                membersText: memberLines.join('\n'),
+                fullText: memberLines.join('\n') + "\n\n" + targetText
+            };
         }
 
-        function copyToClipboard() {
-            const baseStr = document.getElementById('baseTime').value;
-            if (baseStr.length !== 6) return;
-            
-            const h = parseInt(baseStr.substring(0, 2)), m = parseInt(baseStr.substring(2, 4)), s = parseInt(baseStr.substring(4, 6));
-            const baseDate = new Date(Date.UTC(2023, 0, 1, h, m, s));
-
-            const names = document.querySelectorAll('.name');
-            const secs = document.querySelectorAll('.sec');
-            
-            let validEntries = [];
-            for(let i=0; i<names.length; i++) {
-                if(names[i].value.trim() !== "") {
-                    const secVal = parseInt(secs[i].value) || 0;
-                    validEntries.push({
-                        name: names[i].value.trim(),
-                        sec: secVal
-                    });
-                }
+        function calculate() {
+            const data = getCalculationData();
+            if (data !== null) {
+                document.getElementById('output').innerText = data.fullText;
             }
+        }
 
-            if (validEntries.length === 0) return;
-
-            let maxSec = validEntries[0].sec;
-            for(let i = 1; i < validEntries.length; i++) {
-                if(validEntries[i].sec > maxSec) {
-                    maxSec = validEntries[i].sec;
-                }
+        function copyTargetOnly() {
+            const data = getCalculationData();
+            if (data !== null) {
+                navigator.clipboard.writeText(data.targetText).then(() => alert("着弾時刻をコピーしました"));
             }
+        }
 
-            const f = (n) => String(n).padStart(2, '0');
-            let memberLines = [];
-
-            for(let i=0; i<validEntries.length; i++) {
-                const entry = validEntries[i];
-                const diffS = maxSec - entry.sec;
-                const newDate = new Date(baseDate.getTime() + (diffS * 1000));
-
-                memberLines.push(`${entry.name} ${f(newDate.getUTCHours())}${f(newDate.getUTCMinutes())}${f(newDate.getUTCSeconds())}`);
+        function copyMembersOnly() {
+            const data = getCalculationData();
+            if (data !== null) {
+                navigator.clipboard.writeText(data.membersText).then(() => alert("メンバーの時間をコピーしました"));
             }
-
-            if(memberLines.length === 0) return;
-
-            const copyText = memberLines.join('\n');
-            navigator.clipboard.writeText(copyText).then(() => alert("コピーしました"));
         }
     </script>
 </body>

@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>kvk用集結時刻計算ツール</title>
+    <title>集結時刻計算ツール</title>
     <style>
         body { font-family: sans-serif; padding: 15px; font-size: 16px; max-width: 600px; margin: auto; }
         .row { display: flex; align-items: center; margin-bottom: 12px; }
@@ -12,30 +12,85 @@
         .min { flex: 1; width: 20%; }
         .sec { flex: 1; width: 25%; }
         .unit { margin-right: 5px; font-size: 14px; white-space: nowrap; }
-        .interval-row { display: flex; align-items: center; margin-bottom: 15px; font-weight: bold; flex-wrap: wrap; gap: 10px; }
-        .interval-sec { width: 30%; }
+        .setting-box { background: #f1f3f5; padding: 15px; border-radius: 8px; margin-bottom: 15px; }
+        
+        /* トグルスイッチのスタイル（計算モード切替用） */
+        .mode-toggle-row { display: flex; align-items: center; justify-content: space-between; margin-bottom: 15px; padding-bottom: 12px; border-bottom: 1px solid #dcdcdc; }
+        .toggle-container { display: flex; align-items: center; gap: 10px; }
+        .switch { position: relative; display: inline-block; width: 52px; height: 28px; }
+        .switch input { opacity: 0; width: 0; height: 0; }
+        .slider { position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background-color: #007bff; transition: .3s; border-radius: 28px; }
+        .slider:before { position: absolute; content: ""; height: 20px; width: 20px; left: 4px; bottom: 4px; background-color: white; transition: .3s; border-radius: 50%; }
+        input:checked + .slider { background-color: #17a2b8; }
+        input:checked + .slider:before { transform: translateX(24px); }
+        .mode-text { font-weight: bold; font-size: 15px; color: #333; }
+
+        .setting-row { display: flex; align-items: center; margin-bottom: 10px; font-weight: bold; flex-wrap: wrap; gap: 10px; }
+        .num-input { width: 90px; text-align: center; font-weight: bold; }
+        .target-input { width: 140px; text-align: center; font-weight: bold; letter-spacing: 2px; }
+        
+        .mode-inputs { display: none; flex-direction: column; gap: 10px; }
+        .mode-inputs.active { display: flex; }
+
+        /* 追加ボタンとチェックボックスの横並びエリア */
+        .action-bar { display: flex; align-items: center; justify-content: space-between; margin-bottom: 15px; }
+        .input-toggle-area { display: flex; align-items: center; gap: 6px; font-size: 14px; font-weight: bold; cursor: pointer; }
+        .input-toggle-area input[type="checkbox"] { width: 18px; height: 18px; margin: 0; cursor: pointer; }
+
         button { width: 100%; padding: 15px; font-size: 18px; border: none; border-radius: 8px; margin-top: 10px; color: white; cursor: pointer; }
         .btn-calc { background: #007bff; }
         .btn-copy-target { background: #17a2b8; }
         .btn-copy-members { background: #28a745; }
-        .btn-add { background: #6c757d; font-size: 14px; padding: 10px; width: auto; margin-bottom: 15px; }
+        .btn-add { background: #6c757d; font-size: 14px; padding: 10px; width: auto; margin: 0; }
         #output { margin-top: 20px; padding: 15px; background: #f8f9fa; border: 1px solid #dee2e6; white-space: pre-wrap; min-height: 50px; }
     </style>
 </head>
 <body>
 
-    <h3>kvk用集結時刻計算ツール</h3>
+    <h3>集結時刻計算ツール</h3>
     <hr>
     
-    <div class="interval-row">
-        <div>インターバル時間: <input type="number" id="intervalSec" class="interval-sec" value="45" onfocus="this.select();"> 秒</div>
-        <div style="font-weight: normal; font-size: 14px; margin-left: auto;">
-            <label><input type="checkbox" id="useMinSec" onchange="updateInputMode()"> 分＋秒で入力する</label>
+    <div class="setting-box">
+        <!-- モード切替トグル -->
+        <div class="mode-toggle-row">
+            <span class="mode-text" id="modeTitle">計算モード: 現在時刻から計算</span>
+            <div class="toggle-container">
+                <label class="switch">
+                    <input type="checkbox" id="modeToggle" onchange="toggleMode()">
+                    <span class="slider"></span>
+                </label>
+            </div>
+        </div>
+
+        <!-- 現在時刻から計算モード用の入力群 -->
+        <div id="forwardInputs" class="mode-inputs active">
+            <div class="setting-row">
+                インターバル時間: <input type="number" id="intervalSec" class="num-input" value="45" onfocus="this.select();"> 秒
+            </div>
+            <div class="setting-row">
+                集結時間: <input type="number" id="forwardRallyMin" class="num-input" value="5" onfocus="this.select();"> 分
+            </div>
+        </div>
+
+        <!-- 逆算モード用の入力群 -->
+        <div id="backwardInputs" class="mode-inputs">
+            <div class="setting-row">
+                着弾時刻 (UTC 6桁): <input type="text" id="targetTimeInput" class="target-input" placeholder="例: 123456" maxlength="6" onfocus="this.select();">
+            </div>
+            <div class="setting-row">
+                集結時間: <input type="number" id="backwardRallyMin" class="num-input" value="5" onfocus="this.select();"> 分
+            </div>
         </div>
     </div>
     <hr>
     
-    <button class="btn-add" onclick="addRow()">＋ メンバー行を追加</button>
+    <!-- メンバー追加ボタン ＆ 分秒切替チェックボックス（右端） -->
+    <div class="action-bar">
+        <button class="btn-add" onclick="addRow()">＋ メンバー行を追加</button>
+        <label class="input-toggle-area">
+            <input type="checkbox" id="useMinSec" onchange="updateInputMode()"> 分＋秒で入力する
+        </label>
+    </div>
     
     <div id="inputRows"></div>
     
@@ -68,7 +123,25 @@
             container.appendChild(div);
         }
 
-        // モード切替時に既存の入力を保持したまま入力欄のレイアウトを更新
+        // トグルスイッチによるモード切替
+        function toggleMode() {
+            const isBackward = document.getElementById('modeToggle').checked;
+            const forwardInputs = document.getElementById('forwardInputs');
+            const backwardInputs = document.getElementById('backwardInputs');
+            const modeTitle = document.getElementById('modeTitle');
+
+            if (isBackward) {
+                modeTitle.innerText = "計算モード: 着弾時間を指定して逆算";
+                forwardInputs.classList.remove('active');
+                backwardInputs.classList.add('active');
+            } else {
+                modeTitle.innerText = "計算モード: 現在時刻から計算";
+                backwardInputs.classList.remove('active');
+                forwardInputs.classList.add('active');
+            }
+        }
+
+        // 入力モード切替時に既存の入力を保持したままレイアウトを更新
         function updateInputMode() {
             const container = document.getElementById('inputRows');
             const rows = container.children;
@@ -82,7 +155,6 @@
                 let m = minInput ? minInput.value : "";
                 let s = secInput ? secInput.value : "";
                 
-                // 秒のみモードに切り替える際、もし分が入っていれば合計秒数に変換して保持する
                 if (!document.getElementById('useMinSec').checked && m !== "" && !isNaN(m)) {
                     let total = (parseInt(m) * 60) + (s !== "" && !isNaN(s) ? parseInt(s) : 0);
                     s = total;
@@ -124,13 +196,12 @@
             addRow("", "", "");
             addRow("", "", "");
             addRow("", "", "");
+            toggleMode();
         };
 
         function getCalculationData() {
             const now = new Date();
-            const baseDate = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), now.getUTCHours(), now.getUTCMinutes(), now.getUTCSeconds()));
-
-            const intervalVal = parseInt(document.getElementById('intervalSec').value) || 0;
+            const isBackward = document.getElementById('modeToggle').checked;
             const useMinSec = document.getElementById('useMinSec').checked;
 
             const names = document.querySelectorAll('.name');
@@ -168,9 +239,44 @@
                 }
             }
 
+            let baseDate;
+            let intervalVal = 0;
+            let rallyMinVal = 5;
+
+            if (!isBackward) {
+                // 現在時刻基準（順算）
+                baseDate = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), now.getUTCHours(), now.getUTCMinutes(), now.getUTCSeconds()));
+                intervalVal = parseInt(document.getElementById('intervalSec').value) || 0;
+                rallyMinVal = parseInt(document.getElementById('forwardRallyMin').value) || 0;
+            } else {
+                // 着弾時間指定基準（逆算・インターバルは0）
+                const targetStr = document.getElementById('targetTimeInput').value.trim();
+                if (!/^\d{6}$/.test(targetStr)) {
+                    alert("着弾時刻をUTC 6桁（例: 123456）で正しく入力してください。");
+                    return null;
+                }
+
+                const tHour = parseInt(targetStr.substring(0, 2), 10);
+                const tMin = parseInt(targetStr.substring(2, 4), 10);
+                const tSec = parseInt(targetStr.substring(4, 6), 10);
+
+                if (tHour > 23 || tMin > 59 || tSec > 59) {
+                    alert("有効なUTC時刻（時:00-23, 分・秒:00-59）を入力してください。");
+                    return null;
+                }
+
+                rallyMinVal = parseInt(document.getElementById('backwardRallyMin').value) || 0;
+
+                const targetDate = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), tHour, tMin, tSec));
+                
+                const offsetMs = (maxSec + (rallyMinVal * 60)) * 1000;
+                baseDate = new Date(targetDate.getTime() - offsetMs);
+            }
+
             const f = (n) => String(n).padStart(2, '0');
 
-            const finalBaseDate = new Date(baseDate.getTime() + (maxSec * 1000) + (intervalVal * 1000) + (5 * 60 * 1000));
+            const currentRallyMs = rallyMinVal * 60 * 1000;
+            const finalBaseDate = new Date(baseDate.getTime() + (maxSec * 1000) + (intervalVal * 1000) + currentRallyMs);
             const targetText = `着弾時刻: ${f(finalBaseDate.getUTCHours())}${f(finalBaseDate.getUTCMinutes())}${f(finalBaseDate.getUTCSeconds())}`;
 
             let memberLines = [];

@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html lang="ja">
 <head>
@@ -9,9 +8,11 @@
         body { font-family: sans-serif; padding: 15px; font-size: 16px; max-width: 600px; margin: auto; }
         .row { display: flex; align-items: center; margin-bottom: 12px; }
         input { padding: 12px; margin: 0 5px; border: 1px solid #ccc; border-radius: 4px; font-size: 16px; box-sizing: border-box; }
-        .name { flex: 2; width: 50%; }
-        .sec { flex: 1; width: 20%; }
-        .interval-row { display: flex; align-items: center; margin-bottom: 15px; font-weight: bold; }
+        .name { flex: 2; width: 40%; }
+        .min { flex: 1; width: 20%; }
+        .sec { flex: 1; width: 25%; }
+        .unit { margin-right: 5px; font-size: 14px; white-space: nowrap; }
+        .interval-row { display: flex; align-items: center; margin-bottom: 15px; font-weight: bold; flex-wrap: wrap; gap: 10px; }
         .interval-sec { width: 30%; }
         button { width: 100%; padding: 15px; font-size: 18px; border: none; border-radius: 8px; margin-top: 10px; color: white; cursor: pointer; }
         .btn-calc { background: #007bff; }
@@ -27,7 +28,10 @@
     <hr>
     
     <div class="interval-row">
-        インターバル時間: <input type="number" id="intervalSec" class="interval-sec" value="45" onfocus="this.select();"> 秒
+        <div>インターバル時間: <input type="number" id="intervalSec" class="interval-sec" value="45" onfocus="this.select();"> 秒</div>
+        <div style="font-weight: normal; font-size: 14px; margin-left: auto;">
+            <label><input type="checkbox" id="useMinSec" onchange="updateInputMode()"> 分＋秒で入力する</label>
+        </div>
     </div>
     <hr>
     
@@ -42,24 +46,84 @@
     <button class="btn-copy-target" onclick="copyTargetOnly()">着弾時刻をコピー</button>
     
     <script>
-        function addRow(name = "", sec = "") {
+        function addRow(name = "", min = "", sec = "") {
             const container = document.getElementById('inputRows');
             const index = container.children.length + 1;
+            const useMinSec = document.getElementById('useMinSec').checked;
             const div = document.createElement('div');
             div.className = 'row';
-            div.innerHTML = `
-                <input type="text" class="name" placeholder="名前 ${index}" value="${name}" onfocus="this.select();">
-                <input type="number" class="sec" value="${sec}" placeholder="秒" onfocus="this.select();">秒
-            `;
+            
+            if (useMinSec) {
+                div.innerHTML = `
+                    <input type="text" class="name" placeholder="名前 ${index}" value="${name}" onfocus="this.select();">
+                    <input type="number" class="min" value="${min}" placeholder="分" onfocus="this.select();"><span class="unit">分</span>
+                    <input type="number" class="sec" value="${sec}" placeholder="秒" onfocus="this.select();"><span class="unit">秒</span>
+                `;
+            } else {
+                div.innerHTML = `
+                    <input type="text" class="name" placeholder="名前 ${index}" value="${name}" onfocus="this.select();">
+                    <input type="number" class="sec" value="${sec}" placeholder="秒" onfocus="this.select();"><span class="unit">秒</span>
+                `;
+            }
             container.appendChild(div);
         }
 
+        // モード切替時に既存の入力を保持したまま入力欄のレイアウトを更新
+        function updateInputMode() {
+            const container = document.getElementById('inputRows');
+            const rows = container.children;
+            let currentData = [];
+            
+            for(let i = 0; i < rows.length; i++) {
+                const nameInput = rows[i].querySelector('.name');
+                const minInput = rows[i].querySelector('.min');
+                const secInput = rows[i].querySelector('.sec');
+                
+                let m = minInput ? minInput.value : "";
+                let s = secInput ? secInput.value : "";
+                
+                // 秒のみモードに切り替える際、もし分が入っていれば合計秒数に変換して保持する
+                if (!document.getElementById('useMinSec').checked && m !== "" && !isNaN(m)) {
+                    let total = (parseInt(m) * 60) + (s !== "" && !isNaN(s) ? parseInt(s) : 0);
+                    s = total;
+                    m = "";
+                }
+
+                currentData.push({
+                    name: nameInput ? nameInput.value : "",
+                    min: m,
+                    sec: s
+                });
+            }
+            
+            container.innerHTML = "";
+            const useMinSec = document.getElementById('useMinSec').checked;
+            
+            currentData.forEach((data, index) => {
+                const div = document.createElement('div');
+                div.className = 'row';
+                if (useMinSec) {
+                    div.innerHTML = `
+                        <input type="text" class="name" placeholder="名前 ${index + 1}" value="${data.name}" onfocus="this.select();">
+                        <input type="number" class="min" value="${data.min}" placeholder="分" onfocus="this.select();"><span class="unit">分</span>
+                        <input type="number" class="sec" value="${data.sec}" placeholder="秒" onfocus="this.select();"><span class="unit">秒</span>
+                    `;
+                } else {
+                    div.innerHTML = `
+                        <input type="text" class="name" placeholder="名前 ${index + 1}" value="${data.name}" onfocus="this.select();">
+                        <input type="number" class="sec" value="${data.sec}" placeholder="秒" onfocus="this.select();"><span class="unit">秒</span>
+                    `;
+                }
+                container.appendChild(div);
+            });
+        }
+
         window.onload = function() {
-            addRow("ぶん", "36");
-            addRow("ふぁ", "37");
-            addRow("くろ", "37");
-            addRow("えり", "42");
-            addRow("", "");
+            addRow("", "", "");
+            addRow("", "", "");
+            addRow("", "", "");
+            addRow("", "", "");
+            addRow("", "", "");
         };
 
         function getCalculationData() {
@@ -67,17 +131,27 @@
             const baseDate = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), now.getUTCHours(), now.getUTCMinutes(), now.getUTCSeconds()));
 
             const intervalVal = parseInt(document.getElementById('intervalSec').value) || 0;
+            const useMinSec = document.getElementById('useMinSec').checked;
 
             const names = document.querySelectorAll('.name');
             const secs = document.querySelectorAll('.sec');
+            const mins = document.querySelectorAll('.min');
             
             let validEntries = [];
             for(let i = 0; i < names.length; i++) {
                 if(names[i].value.trim() !== "") {
-                    const secVal = secs[i].value === "" ? 0 : parseInt(secs[i].value) || 0;
+                    let totalSec = 0;
+                    if (useMinSec && mins[i]) {
+                        const mVal = mins[i].value === "" ? 0 : parseInt(mins[i].value) || 0;
+                        const sVal = secs[i].value === "" ? 0 : parseInt(secs[i].value) || 0;
+                        totalSec = (mVal * 60) + sVal;
+                    } else {
+                        totalSec = secs[i].value === "" ? 0 : parseInt(secs[i].value) || 0;
+                    }
+
                     validEntries.push({
                         name: names[i].value.trim(),
-                        sec: secVal
+                        sec: totalSec
                     });
                 }
             }
